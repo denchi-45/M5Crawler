@@ -10,16 +10,42 @@ void M5HatMiniJoyC::writeBytes(uint8_t addr, uint8_t reg, uint8_t *buffer,
     _wire->endTransmission();
 }
 
-void M5HatMiniJoyC::readBytes(uint8_t addr, uint8_t reg, uint8_t *buffer,
+bool M5HatMiniJoyC::readBytes(uint8_t addr, uint8_t reg, uint8_t *buffer,
                               uint8_t length) {
     uint8_t index = 0;
+    for (int i = 0; i < length; i++) {
+        buffer[i] = 0;
+    }
     _wire->beginTransmission(addr);
     _wire->write(reg);
-    _wire->endTransmission();
-    _wire->requestFrom(addr, length);
-    for (int i = 0; i < length; i++) {
+    if (_wire->endTransmission() != 0) {
+        _lastReadOk = false;
+        _readErrorCount++;
+        return false;
+    }
+
+    uint8_t received = _wire->requestFrom(addr, length);
+    if (received != length) {
+        while (_wire->available()) {
+            (void)_wire->read();
+        }
+        _lastReadOk = false;
+        _readErrorCount++;
+        return false;
+    }
+
+    while (_wire->available() && index < length) {
         buffer[index++] = _wire->read();
     }
+
+    if (index != length) {
+        _lastReadOk = false;
+        _readErrorCount++;
+        return false;
+    }
+
+    _lastReadOk = true;
+    return true;
 }
 
 bool M5HatMiniJoyC::begin(TwoWire *wire, uint8_t addr, uint8_t sda, uint8_t scl,
@@ -29,6 +55,8 @@ bool M5HatMiniJoyC::begin(TwoWire *wire, uint8_t addr, uint8_t sda, uint8_t scl,
     _sda   = sda;
     _scl   = scl;
     _speed = speed;
+    _lastReadOk = true;
+    _readErrorCount = 0;
     _wire->begin(_sda, _scl, _speed);
     delay(10);
     _wire->beginTransmission(_addr);
@@ -44,7 +72,7 @@ uint16_t M5HatMiniJoyC::getADCValue(minijoyc_adc_index_t index) {
     uint8_t data[4];
     if (index > 2) return 0;
     uint8_t reg = index * 2 + ADC_VALUE_REG;
-    readBytes(_addr, reg, data, 2);
+    if (!readBytes(_addr, reg, data, 2)) return 0;
     uint32_t value = data[0] | (data[1] << 8);
     return value;
 }
@@ -52,16 +80,16 @@ uint16_t M5HatMiniJoyC::getADCValue(minijoyc_adc_index_t index) {
 uint16_t M5HatMiniJoyC::getPOSValue(minijoyc_pos_index_t index,
                                     minijoyc_pos_read_mode_t bit) {
     uint8_t data[4];
-    uint32_t value;
+    uint32_t value = 0;
 
     if (index > 2) return 0;
     if (bit == _10bit) {
         uint8_t reg = index * 2 + POS_VALUE_REG_10_BIT;
-        readBytes(_addr, reg, data, 2);
+        if (!readBytes(_addr, reg, data, 2)) return 0;
         value = data[0] | (data[1] << 8);
     } else if (bit == _8bit) {
         uint8_t reg = index + POS_VALUE_REG_8_BIT;
-        readBytes(_addr, reg, data, 1);
+        if (!readBytes(_addr, reg, data, 1)) return 0;
         value = data[0];
     }
 
@@ -70,7 +98,7 @@ uint16_t M5HatMiniJoyC::getPOSValue(minijoyc_pos_index_t index,
 
 bool M5HatMiniJoyC::getButtonStatus() {
     uint8_t data;
-    readBytes(_addr, BUTTON_REG, &data, 1);
+    if (!readBytes(_addr, BUTTON_REG, &data, 1)) return false;
     return data;
 }
 
@@ -102,7 +130,7 @@ uint16_t M5HatMiniJoyC::getCalValue(minijoyc_cal_index_t index) {
     if (index > 5) return 0;
     uint8_t data[4];
     uint8_t reg = index * 2 + CAL_REG;
-    readBytes(_addr, reg, data, 2);
+    if (!readBytes(_addr, reg, data, 2)) return 0;
     uint16_t value = data[0] | (data[1] << 8);
     return value;
 }
@@ -123,7 +151,7 @@ uint8_t M5HatMiniJoyC::getI2CAddress(void) {
 
     uint8_t RegValue;
 
-    _wire->requestFrom(_addr, 1);
+    Wire.requestFrom(_addr, (uint8_t)1);
     RegValue = Wire.read();
     return RegValue;
 }
@@ -135,7 +163,15 @@ uint8_t M5HatMiniJoyC::getFirmwareVersion(void) {
 
     uint8_t RegValue;
 
-    _wire->requestFrom(_addr, 1);
+    Wire.requestFrom(_addr, (uint8_t)1);
     RegValue = Wire.read();
     return RegValue;
+}
+
+bool M5HatMiniJoyC::wasLastReadSuccessful(void) const {
+    return _lastReadOk;
+}
+
+uint32_t M5HatMiniJoyC::getReadErrorCount(void) const {
+    return _readErrorCount;
 }

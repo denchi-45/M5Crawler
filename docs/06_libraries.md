@@ -86,6 +86,8 @@ MiniJoyC Hat を I2C で制御するためのドライバです。
 | `setI2CAddress(addr)` | I2C アドレス変更 |
 | `getI2CAddress()` | I2C アドレス取得 |
 | `getFirmwareVersion()` | ファームウェアバージョン取得 |
+| `wasLastReadSuccessful()` | 直近 I2C 読み取り結果 |
+| `getReadErrorCount()` | I2C 読み取り失敗回数 |
 
 ### 3.3 現状使用している API
 
@@ -99,8 +101,9 @@ MiniJoyC Hat を I2C で制御するためのドライバです。
 ### 3.4 注意点
 
 - `getPOSValue()` は `uint16_t` を返しますが、コントローラ側は `int8_t` に代入して符号付き 8bit として扱っています。
-- `readBytes()` は `requestFrom()` 後に読み取り可能バイト数を確認していません。I2C エラー時の堅牢性を高める場合は改善候補です。
-- `getI2CAddress()` / `getFirmwareVersion()` 内では `_wire` ではなくグローバル `Wire.read()` を使っています。複数 I2C バス利用時は注意が必要です。
+- `readBytes()` は `requestFrom()` の受信バイト数を確認し、失敗時は 0 を返すようにしています。
+- I2C 読み取り失敗回数は内部でカウントしますが、現状は画面には表示しません。
+- `getI2CAddress()` / `getFirmwareVersion()` は現状未使用であり、既存実装を基本維持しています。
 
 ## 4. M5Unified
 

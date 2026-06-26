@@ -11,6 +11,8 @@ framework = arduino
 
 1 つのプロジェクト内に 2 種類のファームウェアがあり、PlatformIO の環境を指定してビルドします。
 
+現在は Stack-chan(CoreS3) 連携追加により、3 種類のファームウェアがあります。
+
 ## 2. PlatformIO 環境
 
 ### 2.1 クローラ側: `m5stack-stamps3`
@@ -61,6 +63,29 @@ build_src_filter = +<controller_main.cpp> +<M5HatMiniJoyC.cpp>
 > 注意: 環境名は `m5stick-c-plus2` ですが、`board = m5stick-c` です。
 > M5StickC Plus2 専用ボード定義が必要な場合は今後見直し候補です。
 
+### 2.3 Stack-chan 側: `m5stack-cores3-stackchan`
+
+```ini
+[env:m5stack-cores3-stackchan]
+platform = espressif32
+board = m5stack-cores3
+framework = arduino
+lib_deps =
+    m5stack/M5Unified@^0.2.14
+    https://github.com/m5stack/StackChan-BSP.git
+build_flags =
+    -D ARDUINO_USB_MODE=1
+    -D ARDUINO_USB_CDC_ON_BOOT=1
+build_src_filter = +<stackchan_main.cpp>
+```
+
+ビルド対象:
+
+- `src/stackchan_main.cpp`
+
+Stack-chan 環境は CoreS3 の board 定義が必要なため、既存の `espressif32@6.3.1` ではなく
+`espressif32` 最新系を使用します。
+
 ## 3. VS Code / PlatformIO での操作
 
 1. VS Code でプロジェクトフォルダを開く。
@@ -76,6 +101,12 @@ build_src_filter = +<controller_main.cpp> +<M5HatMiniJoyC.cpp>
 pio run -e m5stack-stamps3
 ```
 
+メモリ不足でビルドが失敗する場合は単一ジョブで実行します。
+
+```powershell
+pio run -e m5stack-stamps3 -j 1
+```
+
 ### 4.2 クローラ側書き込み
 
 ```powershell
@@ -88,10 +119,28 @@ pio run -e m5stack-stamps3 -t upload
 pio run -e m5stick-c-plus2
 ```
 
+メモリ不足でビルドが失敗する場合は単一ジョブで実行します。
+
+```powershell
+pio run -e m5stick-c-plus2 -j 1
+```
+
 ### 4.4 コントローラ側書き込み
 
 ```powershell
 pio run -e m5stick-c-plus2 -t upload
+```
+
+### 4.5 Stack-chan 側ビルド
+
+```powershell
+pio run -e m5stack-cores3-stackchan -j 1
+```
+
+### 4.6 Stack-chan 側書き込み
+
+```powershell
+pio run -e m5stack-cores3-stackchan -t upload
 ```
 
 ## 5. ビルド対象切替の仕組み
@@ -103,6 +152,7 @@ pio run -e m5stick-c-plus2 -t upload
 | --- | --- |
 | `m5stack-stamps3` | `+<crawler_main.cpp>` |
 | `m5stick-c-plus2` | `+<controller_main.cpp> +<M5HatMiniJoyC.cpp>` |
+| `m5stack-cores3-stackchan` | `+<stackchan_main.cpp>` |
 
 このため、新しい `.cpp` ファイルを追加した場合は、どちらの環境でビルド対象にするかを
 `build_src_filter` で明示する必要があります。

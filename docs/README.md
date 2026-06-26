@@ -16,6 +16,7 @@
 | [06_libraries.md](06_libraries.md) | 使用ライブラリ・自作ドライバ仕様 |
 | [07_build_and_flash.md](07_build_and_flash.md) | ビルド・書き込み手順（PlatformIO 環境） |
 | [08_known_issues.md](08_known_issues.md) | 既知の課題・注意点・改善候補 |
+| [09_stackchan_integration.md](09_stackchan_integration.md) | Stack-chan(CoreS3) 連携仕様 |
 
 ## プロジェクト概要（要約）
 
@@ -25,6 +26,7 @@ ESP-NOW で操作データを無線送信し、車体側の 4 個のシリアル
 
 - **コントローラ**: M5StickC Plus2 + MiniJoyC (Hat) … `src/controller_main.cpp`
 - **クローラ**: M5Stack StampS3（+ ディスプレイ／Avatar 表示）… `src/crawler_main.cpp`
+- **Stack-chan**: CoreS3 公式版 … `src/stackchan_main.cpp`
 - **通信**: ESP-NOW（Wi-Fi CH1、ブロードキャスト送信）
 
 > 注: 1 つの PlatformIO プロジェクト内に 2 つのファームウェアが同居しており、

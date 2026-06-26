@@ -1,6 +1,9 @@
 # 03. コントローラ仕様
 
-対象ファイル: `src/controller_main.cpp`
+対象ファイル:
+
+- `src/controller_main.cpp`
+- `include/ControlProtocol.h`
 
 ## 1. 役割
 
@@ -12,13 +15,14 @@ ESP-NOW でクローラ側へ送信します。また、M5 本体の A ボタン
 
 | 変数 | 型 | 初期値 | 説明 |
 | --- | --- | ---: | --- |
-| `data` | `ControlData` | 未初期化（グローバル） | 送信する操作データ |
+| `data` | `ControlData` | `initControlData()` で初期化 | 送信する操作データ |
 | `joyc` | `M5HatMiniJoyC` | - | MiniJoyC ドライバ |
-| `maxSpeed` | `int` | 2000 | サーボ速度上限。A ボタンで変更 |
+| `maxSpeed` | `int` | `M5CRAWLER_SPEED_INITIAL` | サーボ速度上限。A ボタンで変更 |
 | `lastSendTime` | `unsigned long` | 0 | 直近送信時刻 |
 | `joyDetected` | `bool` | false | MiniJoyC 検出結果 |
 | `offsetX` | `int8_t` | 0 | 起動時 X 軸ニュートラル値 |
 | `offsetY` | `int8_t` | 0 | 起動時 Y 軸ニュートラル値 |
+| `sequence` | `uint16_t` | 0 | 送信ごとに増加するシーケンス番号 |
 
 ## 3. 起動シーケンス
 
@@ -36,9 +40,10 @@ setup()
   ├─ WiFi.mode(WIFI_STA)
   ├─ WiFi.disconnect()
   ├─ Wi-Fi CH1 固定
+  ├─ 自分の STA MAC アドレスを画面表示
   ├─ esp_now_init()
   ├─ 送信コールバック登録
-  ├─ ブロードキャスト peer 追加
+  ├─ `M5CRAWLER_CRAWLER_MAC` の peer 追加
   └─ Setup Done 表示
 ```
 
@@ -95,11 +100,11 @@ if (abs(data.y) < 5) data.y = 0;
 
 ## 5. 速度上限切替
 
-M5 本体 A ボタン押下で `maxSpeed` を 1000 ずつ増加します。
+M5 本体 A ボタン押下で `maxSpeed` を `M5CRAWLER_SPEED_STEP` ずつ増加します。
 
 ```cpp
-maxSpeed += 1000;
-if (maxSpeed > 6000) maxSpeed = 1000;
+maxSpeed += M5CRAWLER_SPEED_STEP;
+if (maxSpeed > M5CRAWLER_SPEED_MAX) maxSpeed = M5CRAWLER_SPEED_MIN;
 ```
 
 | 押下回数イメージ | `maxSpeed` |
@@ -118,11 +123,9 @@ if (maxSpeed > 6000) maxSpeed = 1000;
 
 ### 6.1 送信先
 
-```cpp
-uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-```
-
-現状はブロードキャスト送信です。
+`include/ControlProtocol.h` の `M5CRAWLER_CRAWLER_MAC` で送信先を指定します。
+初期値 `FF:FF:FF:FF:FF:FF` のままの場合はブロードキャスト送信になります。
+実機 MAC を設定するとユニキャスト送信になります。
 
 ### 6.2 送信周期
 
@@ -137,10 +140,15 @@ if (millis() - lastSendTime > 100) {
 ### 6.3 送信データ
 
 ```cpp
-struct ControlData {
-  int x;
-  int y;
-  int maxSpd;
+struct __attribute__((packed)) ControlData {
+  uint16_t magic;
+  uint8_t version;
+  uint8_t size;
+  uint16_t sequence;
+  int16_t x;
+  int16_t y;
+  int16_t maxSpd;
+  uint8_t checksum;
 };
 ```
 
@@ -169,9 +177,34 @@ joyc.setLEDColor((r << 16) | b);
 | MiniJoyC 未検出 | `joyDetected = false`、画面に `JOYSTICK ERROR` 表示 |
 | ESP-NOW 初期化失敗 | 画面表示後 `setup()` を return。以後 loop は継続するが ESP-NOW 送信は失敗する可能性あり |
 | peer 追加失敗 | 画面に `Failed to add peer` 表示。以後も loop 継続 |
-| 送信失敗 | 通常画面で `Send: ERROR` 表示 |
+| 送信失敗 | 通常画面の送信状態アイコンを赤表示 |
 
-## 9. 今後変更時の注意
+## 9. 画面描画
+
+画面は縦持ち運用に合わせて `M5.Display.setRotation(2)` を使用します。
+M5StickC Plus2 の表示解像度は 135×240 のため、縦画面では幅 135px・高さ 240px を前提に
+初期化完了後は文字中心ではなくグラフィカル UI で状態を表現します。
+
+| 領域 | 位置 | 内容 |
+| --- | --- | --- |
+| ステータスバー | y=0..31 | 送信状態アイコン、通信モードアイコン |
+| 操作パッド | 中央 y≈91 | ジョイスティック X/Y 入力位置 |
+| 速度ゲージ | y≈166..216 | `maxSpeed` 6 段階表示 |
+
+表示内容:
+
+- 送信成功: 緑の電波バー
+- 送信失敗: 赤い X 付き電波アイコン
+- Broadcast: 同心円アイコン
+- Unicast: 2 ノード接続アイコン
+- ジョイスティック: 円形パッド上の点と方向線
+- 速度: 6 本のバーゲージ
+- A ボタン操作: 下部右の丸い `+` アイコン
+
+初期化中は従来通り文字表示を使い、初期化完了後の通常画面のみグラフィカル UI に切り替えます。
+表示更新周期は送信周期とは別に `M5CRAWLER_DISPLAY_INTERVAL_MS` ごとです。
+
+## 10. 今後変更時の注意
 
 - `ControlData` の構造体定義はコントローラ側・クローラ側で完全一致させる必要があります。
 - `int` サイズは ESP32 Arduino 環境では通常 32bit ですが、他環境へ移植する場合は固定長型への変更を推奨します。

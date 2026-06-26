@@ -33,8 +33,10 @@ class M5HatMiniJoyC {
     uint8_t _scl;
     uint8_t _sda;
     uint8_t _speed;
+    bool _lastReadOk;
+    uint32_t _readErrorCount;
     void writeBytes(uint8_t addr, uint8_t reg, uint8_t* buffer, uint8_t length);
-    void readBytes(uint8_t addr, uint8_t reg, uint8_t* buffer, uint8_t length);
+    bool readBytes(uint8_t addr, uint8_t reg, uint8_t* buffer, uint8_t length);
 
    public:
     bool begin(TwoWire* wire = &Wire, uint8_t addr = MiniJoyC_ADDR,
@@ -51,6 +53,8 @@ class M5HatMiniJoyC {
     uint8_t setI2CAddress(uint8_t addr);
     uint8_t getI2CAddress(void);
     uint8_t getFirmwareVersion(void);
+    bool wasLastReadSuccessful(void) const;
+    uint32_t getReadErrorCount(void) const;
 };
 
 #endif
